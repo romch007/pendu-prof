@@ -37,7 +37,7 @@ class Game {
   }
 
   testLetter(letter) {
-    let wasGuessed = false;
+    this.wasGuessed = false;
 
     console.log(this.wordToGuess);
 
@@ -52,11 +52,15 @@ class Game {
   }
 
   toResponse() {
+    console.log(this.partialWord.filter((l) => l !== "_"));
+    console.log(this.wordLength);
     return JSON.stringify({
       nbErrors: this.nbErrors,
       partialWord: this.partialWord,
       wasGuessed: this.wasGuessed,
-      isLoss: this.nbErrors >= this.maxErrors,
+      isLost: this.nbErrors >= this.maxErrors,
+      isWon:
+        this.partialWord.filter((l) => l !== "_").length == this.wordLength,
     });
   }
 }
