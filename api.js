@@ -1,11 +1,11 @@
 const fs = require("fs");
+const cookie = require("cookie");
 const url = require("url");
+const crypto = require("crypto");
 
 const goodWords = loadGoodWords();
-let wordToGuess;
-let nbErrors = 0;
-let maxErrors = 5;
-let partialWord = [];
+
+const games = new Map();
 
 function getRandomInt(min, max) {
   min = Math.ceil(min);
@@ -22,13 +22,43 @@ function isLetter(str) {
   return str.length === 1 && str.match(/[a-z]/i);
 }
 
-function generateTestLetterResponse(wasGuessed) {
-  return JSON.stringify({
-    nbErrors,
-    partialWord,
-    wasGuessed,
-    isLoss: nbErrors >= maxErrors,
-  });
+function generateSessionId() {
+  return crypto.randomBytes(10).toString("hex");
+}
+
+class Game {
+  constructor() {
+    this.wordToGuess = getRandomElement(goodWords);
+    this.wordLength = this.wordToGuess.length;
+    this.partialWord = Array(this.wordLength).fill("_");
+    this.nbErrors = 0;
+    this.maxErrors = 5;
+    this.wasGuessed = false;
+  }
+
+  testLetter(letter) {
+    let wasGuessed = false;
+
+    console.log(this.wordToGuess);
+
+    [...this.wordToGuess].forEach((l, i) => {
+      if (l == letter) {
+        this.partialWord[i] = l;
+        this.wasGuessed = true;
+      }
+    });
+
+    if (!this.wasGuessed) this.nbErrors++;
+  }
+
+  toResponse() {
+    return JSON.stringify({
+      nbErrors: this.nbErrors,
+      partialWord: this.partialWord,
+      wasGuessed: this.wasGuessed,
+      isLoss: this.nbErrors >= this.maxErrors,
+    });
+  }
 }
 
 function manageRequest(request, response) {
@@ -37,20 +67,41 @@ function manageRequest(request, response) {
     response.statusCode = 200;
     response.end(getRandomElement(goodWords));
   } else if (path.pathname === "/api/newGame") {
-    wordToGuess = getRandomElement(goodWords);
-    console.log(wordToGuess);
-    const wordLength = wordToGuess.length;
+    const sessionId = generateSessionId();
 
-    partialWord = Array(wordLength).fill("_");
+    response.setHeader("Set-Cookie", cookie.serialize("session", sessionId));
 
-    response.end(wordLength.toString());
+    const game = new Game();
+    games.set(sessionId, game);
+
+    response.end(game.wordLength.toString());
     response.statusCode = 200;
   } else if (path.pathname === "/api/testLetter") {
-    if (!wordToGuess) {
+    const rawCookies = request.headers["cookie"];
+
+    if (!rawCookies) {
       response.statusCode = 403;
-      response.end("Game is not started");
+      response.end("No cookies!");
       return;
     }
+
+    const cookies = cookie.parse(rawCookies);
+
+    if (!cookies.session) {
+      response.statusCode = 403;
+      response.end("No cookie session!");
+      return;
+    }
+
+    const sessionId = cookies.session;
+
+    if (!games.has(sessionId)) {
+      response.statusCode = 403;
+      response.end("Game is not started!");
+      return;
+    }
+
+    const game = games.get(sessionId);
 
     const params = new URLSearchParams(path.search);
     const letter = params.get("letter");
@@ -61,20 +112,9 @@ function manageRequest(request, response) {
       return;
     }
 
-    let wasGuessed = false;
+    game.testLetter(letter);
 
-    console.log(wordToGuess);
-
-    [...wordToGuess].forEach((l, i) => {
-      if (l == letter) {
-        partialWord[i] = l;
-        wasGuessed = true;
-      }
-    });
-
-    if (!wasGuessed) nbErrors++;
-
-    response.end(generateTestLetterResponse(wasGuessed));
+    response.end(game.toResponse());
   } else {
     response.statusCode = 404;
     response.end();

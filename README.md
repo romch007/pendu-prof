@@ -6,4 +6,4 @@ Installer les dépendances: `yarn`
 
 Pour lancer: `yarn dev`
 
-On peut pas jouer à plusieurs sur le même serveur, j'ai pas le temps de faire une base de données ou autre délire de GAFAM qui prend que des asiats en stage.
+On peut jouer à plusieurs sur l'API, chaque nouvelle partie génère un cookie de session qui permet d'identifier le joueur et gérer sa game de façon adéquate.
